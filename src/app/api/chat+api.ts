@@ -1,79 +1,28 @@
-import {
-  streamText,
-  convertToModelMessages,
-  createUIMessageStream,
-  createUIMessageStreamResponse,
-  type UIMessage,
-} from "ai";
-import { pipeJsonRender } from "@json-render/core";
-import { gateway } from "@ai-sdk/gateway";
-import { catalog } from "@/lib/json-render-catalog";
-
-// Maps internal model IDs to Vercel AI Gateway model IDs
-// Verified against https://vercel.com/ai-gateway/models
-const GATEWAY_MODELS: Record<string, string> = {
-  // Anthropic
-  "claude-sonnet-4-6": "anthropic/claude-sonnet-4.6",
-  "claude-opus-4-6": "anthropic/claude-opus-4.6",
-  "claude-haiku-4-5-20251001": "anthropic/claude-haiku-4.5",
-  // xAI Grok 4.1 Fast (reasoning / non-reasoning)
-  "grok-3": "xai/grok-4.1-fast-reasoning",
-  "grok-3-latest": "xai/grok-4.1-fast-reasoning",
-  "grok-3-mini": "xai/grok-4.1-fast-non-reasoning",
-};
-
-const XAI_MODELS = ["grok-3", "grok-3-latest", "grok-3-mini"] as const;
-
-function toGatewayModelId(id: string): string {
-  return GATEWAY_MODELS[id] ?? id;
-}
+import { anthropic } from "@ai-sdk/anthropic";
+import { convertToModelMessages, streamText } from "ai";
 
 export async function POST(req: Request) {
-  const { messages, model }: { messages: UIMessage[]; model: string } =
-    await req.json();
+  const { messages, model } = await req.json();
 
-  const gatewayModelId = toGatewayModelId(model);
-  console.log("[API] POST /api/chat model:", model, "→ gateway:", gatewayModelId);
-  console.log("[API] messages:", messages.length);
+  const result = streamText({
+    model: anthropic(model ?? "claude-haiku-4-5-20251001"),
+    messages: await convertToModelMessages(messages),
+  });
 
-  try {
-    const result = streamText({
-      model: gateway(gatewayModelId),
-      system: catalog.prompt({ mode: "chat" }),
-      messages: await convertToModelMessages(messages),
-      maxOutputTokens: 4096,
-      ...(XAI_MODELS.includes(model as (typeof XAI_MODELS)[number]) && {
-        providerOptions: {
-          xai: {
-            searchParameters: {
-              mode: "on",
-              returnCitations: true,
-              sources: [{ type: "web" }, { type: "x" }],
-            },
-          },
-        },
-      }),
-    });
+  return result.toUIMessageStreamResponse({
+    onError: __DEV__ ? errorHandler : undefined,
+    headers: {
+      // Issue with iOS NSURLSession that requires Content-Type set in order to enable streaming.
+      // https://github.com/expo/expo/issues/32950#issuecomment-2508297646
+      "Content-Type": "application/octet-stream",
+      "Content-Encoding": "none",
+    },
+  });
+}
 
-    const stream = createUIMessageStream({
-      execute: async ({ writer }) => {
-        writer.merge(
-          pipeJsonRender(
-            result.toUIMessageStream({ sendReasoning: true }) as ReadableStream
-          )
-        );
-      },
-    });
-
-    return createUIMessageStreamResponse({
-      stream,
-      headers: {
-        "Content-Type": "application/octet-stream",
-        "Content-Encoding": "none",
-      },
-    });
-  } catch (err) {
-    console.error("[API] streamText error:", err);
-    return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
-  }
+function errorHandler(error: unknown) {
+  if (error == null) return "unknown error";
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+  return JSON.stringify(error);
 }

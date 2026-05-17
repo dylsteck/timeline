@@ -1,15 +1,15 @@
 {
   "version": 1,
   "skills": {
-    "frontend-design": {
-      "source": "anthropics/skills",
+    "building-native-ui": {
+      "source": "expo/skills",
       "sourceType": "github",
-      "computedHash": "063a0e6448123cd359ad0044cc46b0e490cc7964d45ef4bb9fd842bd2ffbca67"
+      "computedHash": "342df93f481a0dba919f372d6c7b40d2b4bf5b51dd24363aea2e5d0bae27a6fa"
     },
-    "vercel-react-native-skills": {
-      "source": "vercel-labs/agent-skills",
+    "uniwind": {
+      "source": "uni-stack/uniwind",
       "sourceType": "github",
-      "computedHash": "2e9088a7333666d8c2833b8ff58bd51b955501c42b4c7244f72b4cbf22dafcc4"
+      "computedHash": "b10890f7e7cf4c4a683d9cb84df1b02e1d0b4cd7670ffc8369ee5a5740083e49"
     }
   }
 }

@@ -1,105 +1,185 @@
-import "@/global.css";
-
-import { Slot } from "expo-router";
-import { Pressable, StyleSheet } from "react-native";
-import { KeyboardProvider } from "react-native-keyboard-controller";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-  runOnJS,
-  Easing,
-} from "react-native-reanimated";
 import {
-  GestureHandlerRootView,
-  GestureDetector,
-  Gesture,
-} from "react-native-gesture-handler";
-import ThemeProvider from "@/components/theme-provider";
-import { DrawerProvider, useDrawer, DRAWER_WIDTH } from "@/components/drawer/DrawerContext";
-import { Drawer } from "@/components/drawer/Drawer";
-import { SQLiteProvider } from "expo-sqlite";
-import { SafeAreaProvider } from "react-native-safe-area-context";
-import { initDb } from "@/lib/db";
+  DrawerContent,
+  DrawerProvider,
+  useDrawer,
+} from "@/components/drawer-content";
+import { DrawerLayout } from "@/components/drawer-layout";
+import "@/global.css";
+import "@/utils/fetch-polyfill";
+import { useSystemBackgroundColor } from "@/utils/use-system-background-color";
+import { isLiquidGlassAvailable } from "expo-glass-effect";
+import { Stack, useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 
-const EDGE_ZONE = 60; // px from left edge that triggers open
+import { ModelProvider } from "@/components/model-context";
+import {
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider as RNTheme,
+} from "@react-navigation/native";
+import { useColorScheme } from "react-native";
+import { Uniwind, useCSSVariable } from "uniwind";
+import { SafeAreaListener } from "react-native-safe-area-context";
 
-function AppContent() {
-  const { animProgress, isOpen, open, close } = useDrawer();
+const GLASS = isLiquidGlassAvailable();
+const IS_ANDROID = process.env.EXPO_OS === "android";
+const MODELS = [
+  {
+    id: "opus-4.6",
+    label: "Opus 4.6",
+    subtitle: "Most capable for ambitious work",
+  },
+  {
+    id: "sonnet-4.6",
+    label: "Sonnet 4.6",
+    subtitle: "Most efficient for everyday tasks",
+  },
+  {
+    id: "haiku-4.5",
+    label: "Haiku 4.5",
+    subtitle: "Fastest for quick answers",
+  },
+] as const;
 
-  const startX = useSharedValue(0);
-  const startProgress = useSharedValue(0);
+const MORE_MODELS = [
+  { id: "opus-4.5", label: "Opus 4.5" },
+  { id: "opus-3", label: "Opus 3" },
+  { id: "sonnet-4.5", label: "Sonnet 4.5" },
+] as const;
 
-  const swipeGesture = Gesture.Pan()
-    .activeOffsetX([-10, 10])
-    .failOffsetY([-8, 8])
-    .onStart((event) => {
-      startX.value = event.x;
-      startProgress.value = animProgress.value;
-    })
-    .onUpdate((event) => {
-      const drawerOpen = animProgress.value > 0.5;
-      // Only open from the left edge zone; always allow closing from anywhere
-      if (!drawerOpen && startX.value > EDGE_ZONE) return;
-      const newProgress = startProgress.value + event.translationX / DRAWER_WIDTH;
-      animProgress.value = Math.max(0, Math.min(1, newProgress));
-    })
-    .onEnd((event) => {
-      const shouldOpen =
-        event.velocityX > 500 ||
-        (event.velocityX > -500 && animProgress.value > 0.4);
+const ALL_MODELS = [...MODELS, ...MORE_MODELS];
 
-      if (shouldOpen) {
-        animProgress.value = withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) });
-        runOnJS(open)();
-      } else {
-        animProgress.value = withTiming(0, { duration: 260, easing: Easing.out(Easing.cubic) });
-        runOnJS(close)();
-      }
-    });
-
-  const pushStyle = useAnimatedStyle(() => ({
-    flex: 1,
-    transform: [{ translateX: animProgress.value * DRAWER_WIDTH }],
-  }));
-
-  const dimStyle = useAnimatedStyle(() => ({
-    opacity: animProgress.value * 0.35,
-  }));
-
+function ThemeProvider(props: { children: React.ReactNode }) {
+  const colorScheme = useColorScheme();
   return (
-    <GestureDetector gesture={swipeGesture}>
-      <Animated.View style={pushStyle}>
-        <ThemeProvider>
-          <Slot />
-        </ThemeProvider>
-        {/* Tap-to-close dim overlay */}
-        <Animated.View
-          style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }, dimStyle]}
-          pointerEvents={isOpen ? "auto" : "none"}
-        >
-          <Pressable style={StyleSheet.absoluteFill} onPress={close} />
-        </Animated.View>
-      </Animated.View>
-    </GestureDetector>
+    <RNTheme value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      <SafeAreaListener onChange={({ insets }) => Uniwind.updateInsets(insets)}>
+        {props.children}
+      </SafeAreaListener>
+    </RNTheme>
   );
 }
 
-export { ErrorBoundary } from "expo-router";
+export const unstable_settings = {
+  anchor: "index",
+};
 
-export default function Layout() {
+export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#1C1C1E" }}>
-      <SafeAreaProvider>
-        <KeyboardProvider>
-          <SQLiteProvider databaseName="artifacts.db" onInit={initDb}>
+    <ThemeProvider>
+      <KeyboardProvider>
+        <ModelProvider models={ALL_MODELS}>
           <DrawerProvider>
-            <AppContent />
-            <Drawer />
+            <RootDrawer />
           </DrawerProvider>
-          </SQLiteProvider>
-        </KeyboardProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+        </ModelProvider>
+        <StatusBar style="auto" />
+      </KeyboardProvider>
+    </ThemeProvider>
+  );
+}
+
+function RootDrawer() {
+  const router = useRouter();
+  const { isOpen, openDrawer, closeDrawer } = useDrawer();
+
+  useSystemBackgroundColor();
+
+  return (
+    <DrawerLayout
+      open={isOpen}
+      onOpen={openDrawer}
+      onClose={closeDrawer}
+      drawerContent={
+        <DrawerContent
+          onNavigate={(path) => {
+            closeDrawer();
+            router.replace(path, { withAnchor: true });
+          }}
+          onOpenModal={(path) => {
+            router.navigate(path);
+          }}
+        />
+      }
+    >
+      <StackLayout />
+    </DrawerLayout>
+  );
+}
+
+function StackLayout() {
+  const appForeground = useCSSVariable("--app-foreground") as string;
+  const appBackground = useCSSVariable("--app-background") as string;
+
+  return (
+    <Stack
+      screenOptions={{
+        headerTransparent: GLASS,
+        headerBackButtonDisplayMode: GLASS ? "minimal" : "default",
+        headerTintColor: appForeground,
+        headerShadowVisible: IS_ANDROID ? false : undefined,
+        headerStyle: IS_ANDROID
+          ? {
+              backgroundColor: appBackground,
+            }
+          : undefined,
+      }}
+    >
+      <Stack.Screen
+        name="index"
+        dangerouslySingular
+        options={{
+          title: "Chat",
+          animation: "none",
+          gestureEnabled: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="chats"
+        options={{
+          title: "Chats",
+          animation: "none",
+          headerLargeTitleShadowVisible: false,
+          gestureEnabled: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="attachments"
+        options={{
+          title: "Add to chat",
+          presentation: "formSheet",
+          sheetAllowedDetents: [0.55],
+          // following https://m3.material.io/components/bottom-sheets/specs
+          sheetCornerRadius: IS_ANDROID ? 28 : undefined,
+          sheetGrabberVisible: true,
+          headerTransparent: GLASS,
+          headerLargeTitleShadowVisible: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="model-picker"
+        options={{
+          title: "Model",
+          presentation: "formSheet",
+          sheetAllowedDetents: "fitToContents",
+          sheetCornerRadius: IS_ANDROID ? 28 : undefined,
+          sheetGrabberVisible: true,
+          headerTransparent: GLASS,
+          headerLargeTitleShadowVisible: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="(settings)"
+        options={{
+          presentation: IS_ANDROID ? undefined : "modal",
+          headerShown: false,
+        }}
+      />
+    </Stack>
   );
 }

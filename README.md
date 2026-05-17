@@ -1,52 +1,92 @@
-# Artifacts
+# Chat Template
 
-A React Native AI chat app built with Expo Router and the Vercel AI SDK. Stream responses from Claude models with persistent chat history stored locally in SQLite.
+https://github.com/user-attachments/assets/864ca10c-be94-4c45-8e98-a71bff7a0042
+
+A high-performance AI chatbot template built with [Expo](https://expo.dev) and [Expo Router](https://docs.expo.dev/router/introduction/). Ships with iOS 26 Liquid Glass support, a responsive web UI, and runs on iOS, Android, and web from a single codebase.
 
 ## Features
 
-- Real-time streaming chat with Claude (Sonnet, Opus, Haiku)
-- Model selector in the header
-- Chat history in a slide-out drawer
-- SQLite persistence across sessions
+- **Liquid Glass** -- glassmorphic prompt composer, navigation bars, and toolbar buttons on iOS 26 via `expo-glass-effect`
+- **Web-first sidebar** -- collapsible sidebar with Radix context menus, dropdown menus, and tooltips for a desktop-grade web experience
+- **Streaming messages** with throttled ~30fps updates, markdown rendering (code blocks, tables, inline formatting), and shimmer loading states
+- **Platform-adaptive layouts** -- native gesture-driven drawer on iOS/Android, sidebar + inset content panel on web
+- **Dark mode** -- automatic light/dark theme using OKLCH design tokens in Tailwind CSS v4
+- **Native UI controls** -- SwiftUI model picker menu, toolbar buttons, and haptic feedback on iOS
+- **Keyboard-aware** -- prompt input stays above the keyboard with `react-native-keyboard-controller`
+- **Virtualized chat** -- performant scrolling with `@legendapp/list` and Reanimated-powered scroll-to-bottom button
 
-## Setup
+## Tech Stack
+
+| Layer      | Technology                                                                                                              |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Framework  | Expo SDK 55, React Native 0.83, React 19                                                                                |
+| Navigation | Expo Router (file-based) with typed routes, [Legend List](https://legendapp.com/open-source/list/) for virtualized chat |
+| Styling    | Tailwind CSS v4 via [Uniwind](https://uniwind.dev/) + `tailwind-merge`                                                  |
+| Native UI  | `@expo/ui` (SwiftUI), `expo-symbols`, `expo-haptics`, `expo-glass-effect`                                               |
+| Web UI     | Radix UI (context menu, dropdown menu, tooltips), Lucide icons                                                          |
+| Markdown   | Custom AST renderer with `mdast-util-from-markdown` + `react-syntax-highlighter`                                        |
+| Animations | `react-native-reanimated`, `react-native-gesture-handler`                                                               |
+
+## Getting Started
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and fill in the values:
 
 ```bash
+cp .env.example .env
+```
+
+| Variable              | Description                                                                                                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`   | Your [Anthropic API key](https://console.anthropic.com/settings/keys). Used by the server-side chat API route (`app/api/chat+api.ts`) via `@ai-sdk/anthropic`. |
+| `EXPO_PUBLIC_MOCK_AI` | Set to `1` to use mock streaming responses instead of calling the Anthropic API. Useful for UI development without an API key.                                 |
+
+### Install & Run
+
+```bash
+# Install dependencies
 bun install
-cp .env.example .env.local
-# Add your AI_GATEWAY_API_KEY to .env.local (create at vercel.com/dashboard/ai-gateway)
-bun run start
+
+# Start the dev server
+bun start
+
+# Run on a specific platform
+bun run ios
+bun run android
+bun run web
 ```
 
-## Stack
+> Requires [Bun](https://bun.sh) and the [Expo CLI](https://docs.expo.dev/get-started/installation/). For iOS, you'll need Xcode and a simulator or device.
 
-- [Expo Router](https://docs.expo.dev/router/introduction/) — file-based routing + server API routes
-- [Vercel AI SDK v6](https://sdk.vercel.ai/docs) — streaming, `useChat`, Anthropic provider
-- [expo-sqlite](https://docs.expo.dev/versions/latest/sdk/sqlite/) — local chat persistence
-- NativeWind, Reanimated, SF Symbols
+## Customization
 
-## Project Structure
+### Theme
 
-```
-src/
-├── app/
-│   ├── api/chat+api.ts       # POST /api/chat — streaming endpoint
-│   └── (home)/
-│       ├── index.tsx         # Welcome screen
-│       └── chat/[id].tsx     # Active chat screen
-├── components/chat/          # ChatInput, MessageBubble, ModelSelector
-├── components/drawer/        # Animated sidebar with recent chats
-└── lib/                      # db.ts, model-context.tsx, generate-api-url.ts
+Edit `global.css` to change the design tokens. Colors use OKLCH for perceptual uniformity across light and dark modes. The `@theme` block maps CSS variables to Tailwind classes:
+
+```css
+--app-background  ->  bg-background
+--app-foreground  ->  text-foreground
+--app-muted       ->  bg-muted
+--app-border      ->  border-border
+/* etc. */
 ```
 
-See [AGENTS.md](./AGENTS.md) for a full architecture reference.
+### Chat Backend
 
-## Debugging
+The template ships with mock streaming responses in `app/index.tsx`. Replace `mockStreamResponse` with your API integration -- the streaming architecture (`createStreamingStore` + throttled token callback) is ready for real LLM APIs.
 
-**Where to see logs:**
-- **Terminal** (where `bun run start` runs): API logs (`[LLM] chunk:`, `[LLM] reasoning:`), client logs (`[LLM] Stream:`, `[LLM] Complete:`), and errors (`[LLM] Error:`)
-- **Physical device**: Same terminal — Expo pipes device logs there. If you don't see logs, ensure the device is on the same Wi‑Fi as your machine and that `EXPO_PUBLIC_API_BASE_URL` is unset (the app auto-detects the dev server)
+### Database
 
-**No LLM response / stuck on "Thinking...":**
-- Check the terminal for errors. If you see `[LLM] Error:`, the message will describe the failure (e.g. network, API key, CORS)
-- On a physical device, the app uses the dev server URL from the manifest. If it still fails, set `EXPO_PUBLIC_API_BASE_URL=http://YOUR_IP:8081` in `.env.local` (replace with your machine's IP)
+I recommend using Convex, which you can setup in a single command:
+
+```
+npx eas-cli@latest integrations:convex:connect
+```
+
+Pair this with [better-auth](https://labs.convex.dev/better-auth/framework-guides/expo) for authentication. Convex also has support for Expo Notifications: [Learn more](https://www.convex.dev/components/push-notifications).
+
+## License
+
+This template was made for https://agent.expo.dev and is made freely available under the MIT license.
